@@ -1,0 +1,17 @@
+---
+- name: Apply Kustomize in Kubernetes cluster
+  ansible.builtin.command:
+    cmd: kubectl apply -k ../../kubernetes
+  register: kustomize_applied
+  ignore_errors: true
+
+- name: Check if Kustomize apply was successful
+  ansible.builtin.debug:
+    msg: "Kustomize applied successfully."
+  when: kustomize_applied.rc == 0
+
+- name: Fail if Kustomize apply failed
+  ansible.builtin.fail:
+    msg: "Kustomize apply failed."
+  when: kustomize_applied.rc != 0
+

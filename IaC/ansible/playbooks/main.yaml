@@ -1,0 +1,61 @@
+---
+- name: Apply Kustomize and Secrets in Kubernetes cluster
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Install AWS CLI if not present
+      ansible.builtin.package:
+        name: awscli
+        state: present
+
+    - name: Get the AWS region from Terraform Output
+      ansible.builtin.command:
+        cmd: terraform output -raw aws_region
+      register: aws_region_output
+      args:
+        chdir: "../../terraform"
+
+    - name: Get the EKS Cluster Name from Terraform Output
+      ansible.builtin.command:
+        cmd: terraform output -raw cluster_name
+      register: eks_cluster_name_output
+      args:
+        chdir: "../../terraform"
+
+    - name: Get Terraform outputs as JSON
+      ansible.builtin.command:
+        cmd: terraform output -json
+      register: terraform_outputs
+      args:
+        chdir: "../../terraform"
+
+    - name: Configure AWS CLI with the region from Terraform
+      ansible.builtin.command:
+        cmd: aws configure set region "{{ aws_region_output.stdout }}"
+
+    - name: Update kubeconfig to connect to EKS cluster
+      include_tasks: "../tasks/update_kubeconfig.yaml"
+
+    - name: Apply Ghost Namespace in Kubernetes cluster
+      ansible.builtin.command:
+        cmd: kubectl apply -f ../../kubernetes/ghost/ghost-namespace.yaml
+      register: ghost_namespace_applied
+
+    - name: Replace placeholders in Ghost Secrets and upload to S3
+      include_tasks: "../tasks/replace_and_upload_ghost_secrets.yaml"
+      when: ghost_namespace_applied.rc == 0
+
+    - name: Apply Kustomize in Kubernetes cluster
+      include_tasks: "../tasks/apply_kustomize.yaml"
+
+    - name: Restart all pods in the nginx namespace
+      ansible.builtin.command:
+        cmd: kubectl delete pod --all -n nginx
+      when: kustomize_applied.rc == 0
+
+    - name: Restart all pods in the ghost namespace
+      ansible.builtin.command:
+        cmd: kubectl delete pod --all -n ghost
+      when: kustomize_applied.rc == 0
+

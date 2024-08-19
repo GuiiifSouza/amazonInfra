@@ -1,0 +1,6 @@
+resources:
+  - ghost-namespace.yaml
+  - ghost-deployment.yaml
+  - ghost-service.yaml
+  - ghost-hpa.yaml
+
